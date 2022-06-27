@@ -1,0 +1,171 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Home</title>
+</head>
+
+<style>
+    .chatbox {
+        outline: 1px solid silver;
+        min-height: 160px;
+        padding: 0.5rem;
+    }
+</style>
+
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <h1 class="display-4 text-center mt-3 fw-bold">Home Page</h1>
+                <hr>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <h1 class="display-6 fw-bold">Chat</h1>
+
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" name="username" id="username" class="form-control" autocomplete="off">
+
+                    <label for="username">Message:</label>
+                    <input type="text" name="message" id="message" class="form-control" autocomplete="off">
+                </div>
+
+                <hr>
+                <a href="javascript:void(0)" ; class="btn btn-primary" id="sendBtn">Send Message</a>
+
+                <input type="hidden" name="action" id="action">
+
+                <div id="status" class="mt-2 float-end">
+
+                </div>
+
+                <div id="output" class="chatbox mt-3">
+
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <h1 class="display-6 fw-bold">Who's Online</h1>
+                <ul id="online_users"></ul>
+            </div>
+        </div>
+        <p class="text-center mt-3"><a href="https://github.com/LuisEduardo-M">Github</a></p>
+    </div>
+
+    <script src="/static/reconnecting-websocket.min.js"></script>
+
+    <script>
+        let socket = null;
+        let o = document.getElementById("output");
+        let userField = document.getElementById("username");
+        let messageField = document.getElementById("message");
+
+        window.onbeforeunload = function () {
+            console.log("Leaving");
+            let jsonData = {};
+            jsonData["action"] = "left";
+            socket.send(JSON.stringify(jsonData));
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            socket = new ReconnectingWebSocket("ws://127.0.0.1:8000/ws", null, { debug: true, reconnectInterval: 3000 });
+
+            const offline = `<span class="badge bg-danger">Not connected</span>`
+            const online = `<span class="badge bg-success">Connected</span>`
+            const error = `<span class="badge bg-warning">Error</span>`
+            let statusDiv = document.getElementById("status");
+
+            socket.onopen = () => {
+                console.log("Success");
+                statusDiv.innerHTML = online;
+            }
+
+            socket.onclose = () => {
+                console.log("Connection closed");
+                statusDiv.innerHTML = offline;
+            }
+
+            socket.onerror = () => {
+                console.log("Error");
+                statusDiv.innerHTML = error;
+            }
+
+            socket.onmessage = msg => {
+                let data = JSON.parse(msg.data);
+                console.log("Action is", data.action);
+
+                switch (data.action) {
+                    case "list_users":
+                        let ul = document.getElementById("online_users");
+                        while (ul.firstChild) ul.removeChild(ul.firstChild);
+
+                        if (data.connected_users.length > 0) {
+                            data.connected_users.forEach(function (item) {
+                                let li = document.createElement("li");
+                                li.appendChild(document.createTextNode(item));
+                                ul.appendChild(li);
+                            })
+                        }
+                        break;
+
+                    case "broadcast":
+                        o.innerHTML = o.innerHTML + data.message + "<br>"
+                        break;
+
+                }
+            }
+
+            userField.addEventListener("change", function () {
+                let jsonData = {};
+                jsonData["action"] = "username";
+                jsonData["username"] = this.value;
+                socket.send(JSON.stringify(jsonData));
+            })
+
+            messageField.addEventListener("keydown", function (event) {
+                if (event.code === "Enter") {
+                    if (!socket) {
+                        console.log("no connection");
+                        return false;
+                    }
+                    if ((userField.value === "") || (messageField.value === "")) {
+                        alert("Fill out username and message!");
+                        return false;
+                    } else {
+                        sendMessage();
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            })
+
+            document.getElementById("sendBtn").addEventListener("click", function () {
+                if ((userField.value === "") || (messageField.value === "")) {
+                    alert("Fill out username and message!");
+                    return false;
+                } else {
+                    sendMessage();
+                }
+            })
+        });
+
+        const sendMessage = () => {
+            let jsonData = {};
+            jsonData["action"] = "broadcast";
+            jsonData["username"] = userField.value;
+            jsonData["message"] = messageField.value;
+            socket.send(JSON.stringify(jsonData));
+            messageField.value = "";
+        }
+
+    </script>
+</body>
+
+</html>
